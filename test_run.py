@@ -21,9 +21,11 @@ def test_visualizer():
     print("Creating dummy assets...")
     audio_path, image_path = create_dummy_assets()
     
-    print("Initializing Visualizer...")
+    print("Initializing Visualizer (Circular with Logo)...")
+    # Use image_path as logo_path for testing
     viz = AudioVisualizer(audio_path, image_path, resolution=(640, 360), fps=10, 
-                          spectrum_opacity=0.5, spectrum_height_scale=0.5, smoothing_factor=10)
+                          spectrum_opacity=0.5, spectrum_height_scale=0.5, smoothing_factor=10,
+                          template="circular", num_bars=30, logo_path=image_path, blur_radius=50)
     
     print("Generating Video...")
     output_path = "test_output.mp4"

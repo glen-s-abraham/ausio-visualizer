@@ -23,9 +23,22 @@ res_name = st.sidebar.selectbox("Resolution", list(resolution_options.keys()))
 resolution = resolution_options[res_name]
 
 st.sidebar.subheader("Visual Settings")
+template = st.sidebar.selectbox("Template", ["Linear (Classic)", "Circular (Logo)"])
 spectrum_opacity = st.sidebar.slider("Spectrum Opacity", 0.1, 1.0, 0.8)
-spectrum_height = st.sidebar.slider("Spectrum Height", 0.1, 0.8, 0.3)
+spectrum_height = st.sidebar.slider("Spectrum Height/Length", 0.1, 0.8, 0.3)
 smoothing = st.sidebar.slider("Motion Smoothing", 1, 20, 5)
+
+num_bars = 60
+logo_path = None
+if template == "Circular (Logo)":
+    num_bars = st.sidebar.slider("Number of Bars", 10, 180, 60)
+    uploaded_logo = st.sidebar.file_uploader("Logo (Optional)", type=["jpg", "jpeg", "png"])
+    if uploaded_logo:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_logo:
+            tmp_logo.write(uploaded_logo.read())
+            logo_path = tmp_logo.name
+
+blur_radius = st.sidebar.slider("Background Blur", 0, 100, 30)
 
 # Main Area
 col1, col2 = st.columns(2)
@@ -82,9 +95,14 @@ if st.button("Generate Preview Frame"):
     else:
         with st.spinner("Generating preview..."):
             try:
+                # Map template name to ID
+                template_id = "circular" if "Circular" in template else "linear"
+                
                 # Initialize visualizer (lightweight if possible, but we need analysis)
                 viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
-                                      spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, smoothing_factor=smoothing)
+                                      spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
+                                      smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
+                                      logo_path=logo_path, blur_radius=blur_radius)
                 
                 # Get frame
                 frame = viz.make_frame(preview_time)
@@ -107,8 +125,11 @@ if st.button("Generate Video", type="primary"):
             
             # Initialize visualizer
             status_text.text("Analyzing audio...")
+            template_id = "circular" if "Circular" in template else "linear"
             viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
-                                  spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, smoothing_factor=smoothing)
+                                  spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
+                                  smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
+                                  logo_path=logo_path, blur_radius=blur_radius)
             
             # Generate
             status_text.text("Rendering video frames...")
