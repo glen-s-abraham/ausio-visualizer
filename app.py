@@ -3,6 +3,7 @@ import os
 import tempfile
 from processor import AudioVisualizer, download_audio_from_youtube
 from PIL import Image
+import config
 
 st.set_page_config(page_title="Audio Visualizer", layout="wide")
 
@@ -34,9 +35,14 @@ if template == "Circular (Logo)":
     num_bars = st.sidebar.slider("Number of Bars", 10, 180, 60)
     uploaded_logo = st.sidebar.file_uploader("Logo (Optional)", type=["jpg", "jpeg", "png"])
     if uploaded_logo:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_logo:
-            tmp_logo.write(uploaded_logo.read())
-            logo_path = tmp_logo.name
+        logo_path = os.path.join(config.IMAGE_DIR, uploaded_logo.name)
+        with open(logo_path, "wb") as f:
+            f.write(uploaded_logo.read())
+    circle_scale = st.sidebar.slider("Circle Size", 0.1, 0.8, 0.4)
+    logo_scale = st.sidebar.slider("Logo Scale (Inside Circle)", 0.1, 1.0, 0.8)
+else:
+    circle_scale = 0.4
+    logo_scale = 0.8
 
 blur_radius = st.sidebar.slider("Background Blur", 0, 100, 30)
 
@@ -51,18 +57,17 @@ with col1:
     if audio_source == "Upload File":
         uploaded_audio = st.file_uploader("Upload MP3/WAV", type=["mp3", "wav"])
         if uploaded_audio:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_audio:
-                tmp_audio.write(uploaded_audio.read())
-                audio_path = tmp_audio.name
+            audio_path = os.path.join(config.AUDIO_DIR, uploaded_audio.name)
+            with open(audio_path, "wb") as f:
+                f.write(uploaded_audio.read())
     else:
         yt_url = st.text_input("YouTube URL")
         if yt_url:
             if st.button("Download Audio"):
                 with st.spinner("Downloading audio..."):
                     try:
-                        # Use a temp directory
-                        temp_dir = tempfile.gettempdir()
-                        output_path = os.path.join(temp_dir, "yt_audio.mp3")
+                        # Use persistent directory
+                        output_path = os.path.join(config.AUDIO_DIR, "yt_audio.mp3")
                         audio_path = download_audio_from_youtube(yt_url, output_path)
                         st.success(f"Downloaded: {os.path.basename(audio_path)}")
                         # Store in session state to persist
@@ -80,9 +85,9 @@ with col2:
     if uploaded_image:
         # Show preview
         st.image(uploaded_image, caption="Artwork Preview", width=300)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
-            tmp_img.write(uploaded_image.read())
-            image_path = tmp_img.name
+        image_path = os.path.join(config.IMAGE_DIR, uploaded_image.name)
+        with open(image_path, "wb") as f:
+            f.write(uploaded_image.read())
 
 st.divider()
 
@@ -92,6 +97,8 @@ preview_time = st.slider("Preview Timestamp (seconds)", 0, 60, 10)
 if st.button("Generate Preview Frame"):
     if not audio_path or not image_path:
         st.error("Please provide both audio and artwork.")
+    elif not os.path.exists(audio_path):
+        st.error(f"Audio file not found at {audio_path}. Please download or upload again.")
     else:
         with st.spinner("Generating preview..."):
             try:
@@ -102,7 +109,8 @@ if st.button("Generate Preview Frame"):
                 viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
                                       spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
                                       smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
-                                      logo_path=logo_path, blur_radius=blur_radius)
+                                      logo_path=logo_path, blur_radius=blur_radius, logo_scale=logo_scale,
+                                      circle_scale=circle_scale)
                 
                 # Get frame
                 frame = viz.make_frame(preview_time)
@@ -115,13 +123,15 @@ st.divider()
 if st.button("Generate Video", type="primary"):
     if not audio_path or not image_path:
         st.error("Please provide both audio and artwork.")
+    elif not os.path.exists(audio_path):
+        st.error(f"Audio file not found at {audio_path}. Please download or upload again.")
     else:
         st.info("Generating video... This may take a while.")
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         try:
-            output_file = "output_video.mp4"
+            output_file = os.path.join(config.VIDEO_DIR, "output_video.mp4")
             
             # Initialize visualizer
             status_text.text("Analyzing audio...")
@@ -129,7 +139,8 @@ if st.button("Generate Video", type="primary"):
             viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
                                   spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
                                   smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
-                                  logo_path=logo_path, blur_radius=blur_radius)
+                                  logo_path=logo_path, blur_radius=blur_radius, logo_scale=logo_scale,
+                                  circle_scale=circle_scale)
             
             # Generate
             status_text.text("Rendering video frames...")

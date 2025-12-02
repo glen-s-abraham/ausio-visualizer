@@ -25,7 +25,8 @@ def test_visualizer():
     # Use image_path as logo_path for testing
     viz = AudioVisualizer(audio_path, image_path, resolution=(640, 360), fps=10, 
                           spectrum_opacity=0.5, spectrum_height_scale=0.5, smoothing_factor=10,
-                          template="circular", num_bars=30, logo_path=image_path, blur_radius=50)
+                          template="circular", num_bars=30, logo_path=image_path, blur_radius=50, 
+                          logo_scale=0.8, circle_scale=0.4)
     
     print("Generating Video...")
     output_path = "test_output.mp4"

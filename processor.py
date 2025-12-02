@@ -11,15 +11,14 @@ def download_audio_from_youtube(url, output_path="temp_audio.mp3"):
     """Downloads audio from a YouTube URL."""
     ydl_opts = {
         'format': 'bestaudio/best',
+        'outtmpl': output_path,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-        'outtmpl': output_path.replace(".mp3", ""), # yt-dlp adds extension
-        'quiet': True,
         'nocheckcertificate': True,
-        'ignoreerrors': True,
+        'quiet': True,
         'no_warnings': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -43,7 +42,7 @@ def download_audio_from_youtube(url, output_path="temp_audio.mp3"):
 class AudioVisualizer:
     def __init__(self, audio_path, image_path, resolution=(1280, 720), fps=30, bar_color=(255, 255, 255), 
                  spectrum_opacity=0.8, spectrum_height_scale=0.3, smoothing_factor=5, 
-                 template="linear", num_bars=60, logo_path=None, blur_radius=30):
+                 template="linear", num_bars=60, logo_path=None, blur_radius=30, logo_scale=0.8, circle_scale=0.4):
         self.audio_path = audio_path
         self.image_path = image_path
         self.resolution = resolution
@@ -56,6 +55,8 @@ class AudioVisualizer:
         self.num_bars = num_bars
         self.logo_path = logo_path
         self.blur_radius = blur_radius
+        self.logo_scale = logo_scale
+        self.circle_scale = circle_scale
         
         # Load audio for analysis
         self.y, self.sr = librosa.load(audio_path, sr=None)
@@ -103,32 +104,48 @@ class AudioVisualizer:
         self.fg_array_linear = np.array(fg_img_linear)
         
         # For Circular: Square crop then circle mask
-        # Determine size (e.g., 40% of height for the circle diameter)
-        circle_diam = int(self.resolution[1] * 0.4)
+        # Determine size of the container circle
+        circle_diam = int(self.resolution[1] * self.circle_scale)
         
         if self.logo_path:
             # Use provided logo
-            img_to_circle = Image.open(self.logo_path).convert('RGB')
+            img_to_circle = Image.open(self.logo_path).convert('RGBA')
         else:
             # Use main image
-            img_to_circle = img
+            img_to_circle = img.convert('RGBA')
             
-        # Crop center square from image
-        min_dim = min(img_to_circle.width, img_to_circle.height)
-        left = (img_to_circle.width - min_dim) // 2
-        top = (img_to_circle.height - min_dim) // 2
-        img_square = img_to_circle.crop((left, top, left + min_dim, top + min_dim))
-        img_square = img_square.resize((circle_diam, circle_diam), Image.LANCZOS)
+        # Determine size of the logo inside the circle
+        logo_diam = int(circle_diam * self.logo_scale)
         
-        # Create circular mask
+        # Resize logo to fit inside (maintain aspect ratio if needed, but here we force square/circle fit usually)
+        # Or better, keep aspect ratio and fit within logo_diam box
+        aspect = img_to_circle.width / img_to_circle.height
+        if aspect > 1:
+            w = logo_diam
+            h = int(logo_diam / aspect)
+        else:
+            h = logo_diam
+            w = int(logo_diam * aspect)
+            
+        img_resized = img_to_circle.resize((w, h), Image.LANCZOS)
+        
+        # Create a transparent container of size circle_diam
+        img_container = Image.new('RGBA', (circle_diam, circle_diam), (0, 0, 0, 0))
+        
+        # Paste resized logo in center
+        offset_x = (circle_diam - w) // 2
+        offset_y = (circle_diam - h) // 2
+        img_container.paste(img_resized, (offset_x, offset_y), mask=img_resized if 'A' in img_resized.getbands() else None)
+        
+        # Create circular mask for the whole container
         mask = Image.new('L', (circle_diam, circle_diam), 0)
         from PIL import ImageDraw
         draw = ImageDraw.Draw(mask)
         draw.ellipse((0, 0, circle_diam, circle_diam), fill=255)
         
-        # Apply mask
+        # Apply mask to container
         img_circular = Image.new('RGBA', (circle_diam, circle_diam), (0, 0, 0, 0))
-        img_circular.paste(img_square, (0, 0), mask=mask)
+        img_circular.paste(img_container, (0, 0), mask=mask)
         
         # Convert to numpy array (keep alpha for transparency)
         self.fg_array_circular = np.array(img_circular)
