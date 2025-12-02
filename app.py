@@ -24,14 +24,14 @@ res_name = st.sidebar.selectbox("Resolution", list(resolution_options.keys()))
 resolution = resolution_options[res_name]
 
 st.sidebar.subheader("Visual Settings")
-template = st.sidebar.selectbox("Template", ["Linear (Classic)", "Circular (Logo)"])
+template = st.sidebar.selectbox("Template", ["Linear (Classic)", "Circular (Logo)", "Shorts (9:16)"])
 spectrum_opacity = st.sidebar.slider("Spectrum Opacity", 0.1, 1.0, 0.8)
 spectrum_height = st.sidebar.slider("Spectrum Height/Length", 0.1, 0.8, 0.3)
 smoothing = st.sidebar.slider("Motion Smoothing", 1, 20, 5)
 
 num_bars = 60
 logo_path = None
-if template == "Circular (Logo)":
+if template == "Circular (Logo)" or template == "Shorts (9:16)":
     num_bars = st.sidebar.slider("Number of Bars", 10, 180, 60)
     uploaded_logo = st.sidebar.file_uploader("Logo (Optional)", type=["jpg", "jpeg", "png"])
     if uploaded_logo:
@@ -51,6 +51,33 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("1. Audio Source")
+    
+    # Time Range Input
+    time_range = st.text_input("Time Range (e.g., 00:58 to 01:28)", help="Leave empty for full audio")
+    start_time = 0
+    end_time = None
+    
+    if time_range:
+        try:
+            parts = time_range.lower().split("to")
+            if len(parts) == 2:
+                start_str = parts[0].strip()
+                end_str = parts[1].strip()
+                
+                def parse_time(t_str):
+                    if ":" in t_str:
+                        m, s = map(int, t_str.split(":"))
+                        return m * 60 + s
+                    return int(t_str)
+                    
+                start_time = parse_time(start_str)
+                end_time = parse_time(end_str)
+                st.success(f"Selected range: {start_time}s to {end_time}s")
+            else:
+                st.warning("Invalid format. Use 'mm:ss to mm:ss'")
+        except Exception as e:
+            st.error(f"Error parsing time: {e}")
+
     audio_source = st.radio("Choose Source", ["Upload File", "YouTube URL"])
     
     audio_path = None
@@ -103,14 +130,22 @@ if st.button("Generate Preview Frame"):
         with st.spinner("Generating preview..."):
             try:
                 # Map template name to ID
-                template_id = "circular" if "Circular" in template else "linear"
+                template_id = "circular" if ("Circular" in template or "Shorts" in template) else "linear"
+                
+                # Adjust resolution for Shorts
+                current_resolution = resolution
+                if "Shorts" in template:
+                    # Swap width and height for 9:16 if needed, or just force 9:16 based on height
+                    # Usually shorts are 1080x1920 or 720x1280
+                    # Let's just swap the selected resolution dimensions
+                    current_resolution = (resolution[1], resolution[0])
                 
                 # Initialize visualizer (lightweight if possible, but we need analysis)
-                viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
+                viz = AudioVisualizer(audio_path, image_path, resolution=current_resolution, fps=fps, bar_color=bar_color,
                                       spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
                                       smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
                                       logo_path=logo_path, blur_radius=blur_radius, logo_scale=logo_scale,
-                                      circle_scale=circle_scale)
+                                      circle_scale=circle_scale, start_time=start_time, end_time=end_time)
                 
                 # Get frame
                 frame = viz.make_frame(preview_time)
@@ -135,12 +170,19 @@ if st.button("Generate Video", type="primary"):
             
             # Initialize visualizer
             status_text.text("Analyzing audio...")
-            template_id = "circular" if "Circular" in template else "linear"
-            viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
+            status_text.text("Analyzing audio...")
+            template_id = "circular" if ("Circular" in template or "Shorts" in template) else "linear"
+            
+            # Adjust resolution for Shorts
+            current_resolution = resolution
+            if "Shorts" in template:
+                current_resolution = (resolution[1], resolution[0])
+            
+            viz = AudioVisualizer(audio_path, image_path, resolution=current_resolution, fps=fps, bar_color=bar_color,
                                   spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, 
                                   smoothing_factor=smoothing, template=template_id, num_bars=num_bars,
                                   logo_path=logo_path, blur_radius=blur_radius, logo_scale=logo_scale,
-                                  circle_scale=circle_scale)
+                                  circle_scale=circle_scale, start_time=start_time, end_time=end_time)
             
             # Generate
             status_text.text("Rendering video frames...")

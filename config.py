@@ -1,7 +1,7 @@
 import os
 
 # Default configuration
-BASE_OUTPUT_DIR = r"C:\Users\iss211\av-out"
+BASE_OUTPUT_DIR = r"/home/glen-personal/Videos/av-out"
 
 # Create directory if it doesn't exist
 if not os.path.exists(BASE_OUTPUT_DIR):

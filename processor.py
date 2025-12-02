@@ -42,7 +42,8 @@ def download_audio_from_youtube(url, output_path="temp_audio.mp3"):
 class AudioVisualizer:
     def __init__(self, audio_path, image_path, resolution=(1280, 720), fps=30, bar_color=(255, 255, 255), 
                  spectrum_opacity=0.8, spectrum_height_scale=0.3, smoothing_factor=5, 
-                 template="linear", num_bars=60, logo_path=None, blur_radius=30, logo_scale=0.8, circle_scale=0.4):
+                 template="linear", num_bars=60, logo_path=None, blur_radius=30, logo_scale=0.8, circle_scale=0.4,
+                 start_time=0, end_time=None):
         self.audio_path = audio_path
         self.image_path = image_path
         self.resolution = resolution
@@ -57,9 +58,16 @@ class AudioVisualizer:
         self.blur_radius = blur_radius
         self.logo_scale = logo_scale
         self.circle_scale = circle_scale
+        self.start_time = start_time
+        self.end_time = end_time
         
         # Load audio for analysis
-        self.y, self.sr = librosa.load(audio_path, sr=None)
+        # Calculate duration to load
+        duration_to_load = None
+        if self.end_time is not None:
+            duration_to_load = self.end_time - self.start_time
+            
+        self.y, self.sr = librosa.load(audio_path, sr=None, offset=self.start_time, duration=duration_to_load)
         self.duration = librosa.get_duration(y=self.y, sr=self.sr)
         
         # Analyze audio
@@ -90,8 +98,10 @@ class AudioVisualizer:
         # Load and process background
         img = Image.open(self.image_path).convert('RGB')
         
-        # Create background (blurred and stretched)
-        bg_img = img.resize(self.resolution)
+        # Create background (blurred and stretched/cropped)
+        # Use ImageOps.fit to cover the area without distortion
+        from PIL import ImageOps
+        bg_img = ImageOps.fit(img, self.resolution, method=Image.LANCZOS)
         bg_img = bg_img.filter(ImageFilter.GaussianBlur(radius=self.blur_radius))
         self.bg_array = np.array(bg_img)
         
@@ -324,6 +334,12 @@ class AudioVisualizer:
         
         # Add audio
         audio = AudioFileClip(self.audio_path)
+        
+        # Trim audio if needed
+        if self.start_time > 0 or self.end_time is not None:
+            end = self.end_time if self.end_time is not None else audio.duration
+            audio = audio.subclipped(self.start_time, end)
+            
         clip = clip.with_audio(audio)
         
         # Write file
