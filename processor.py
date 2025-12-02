@@ -90,8 +90,8 @@ class AudioVisualizer:
         self.bg_array = np.array(bg_img)
         
         # Create foreground (center artwork)
-        # Determine size (e.g., 50% of height)
-        target_h = int(self.resolution[1] * 0.6)
+        # Determine size (e.g., 100% of height)
+        target_h = int(self.resolution[1])
         aspect = img.width / img.height
         target_w = int(target_h * aspect)
         
@@ -125,59 +125,31 @@ class AudioVisualizer:
         return norm_freqs
 
     def make_frame(self, t):
-        # Base frame is background
-        frame = self.bg_array.copy()
-        
-        # 1. Pulsating Effect
+        # 1. Pulsating Effect (Applied to Background)
         loudness = self.get_audio_loudness(t)
-        zoom_factor = 1.0 + (loudness * 0.05) # Subtle zoom
+        zoom_factor = 1.0 + (loudness * 0.1) # Stronger zoom for background
         
-        h, w = self.fg_array.shape[:2]
-        new_h, new_w = int(h * zoom_factor), int(w * zoom_factor)
+        # To zoom in, we crop a smaller center region and resize up to resolution
+        # crop_w = resolution_w / zoom_factor
+        crop_w = int(self.resolution[0] / zoom_factor)
+        crop_h = int(self.resolution[1] / zoom_factor)
         
-        # Resize foreground using OpenCV for speed
-        fg_resized = cv2.resize(self.fg_array, (new_w, new_h))
+        # Center of background
+        bg_h, bg_w = self.bg_array.shape[:2]
+        cx, cy = bg_w // 2, bg_h // 2
         
-        # Center it
-        y1 = self.fg_center[1] - new_h // 2
-        y2 = y1 + new_h
-        x1 = self.fg_center[0] - new_w // 2
-        x2 = x1 + new_w
+        x1 = max(0, cx - crop_w // 2)
+        y1 = max(0, cy - crop_h // 2)
+        x2 = min(bg_w, x1 + crop_w)
+        y2 = min(bg_h, y1 + crop_h)
         
-        # Handle boundaries
-        # Create a canvas of the same size as frame to overlay
-        overlay = np.zeros_like(frame)
+        # Crop and resize
+        bg_crop = self.bg_array[y1:y2, x1:x2]
+        frame = cv2.resize(bg_crop, self.resolution)
         
-        # Calculate valid ranges
-        # Source ranges
-        sy1, sy2 = 0, new_h
-        sx1, sx2 = 0, new_w
-        
-        # Destination ranges
-        dy1, dy2 = y1, y2
-        dx1, dx2 = x1, x2
-        
-        # Clipping
-        if dy1 < 0:
-            sy1 -= dy1
-            dy1 = 0
-        if dy2 > self.resolution[1]:
-            sy2 -= (dy2 - self.resolution[1])
-            dy2 = self.resolution[1]
-        if dx1 < 0:
-            sx1 -= dx1
-            dx1 = 0
-        if dx2 > self.resolution[0]:
-            sx2 -= (dx2 - self.resolution[0])
-            dx2 = self.resolution[0]
-            
-        if dy2 > dy1 and dx2 > dx1:
-            frame[dy1:dy2, dx1:dx2] = fg_resized[sy1:sy2, sx1:sx2]
-
         # 2. Spectrum Effect
         bars = self.get_spectrum_bars(t)
         num_bars = len(bars)
-        bar_width = self.resolution[0] // num_bars
         
         # Create a separate layer for spectrum to handle opacity
         spectrum_layer = frame.copy()
@@ -185,14 +157,39 @@ class AudioVisualizer:
         # Draw bars at the bottom
         for i, val in enumerate(bars):
             height = int(val * (self.resolution[1] * self.spectrum_height_scale)) 
-            x = i * bar_width
+            
+            # Calculate exact coordinates to cover full width
+            x_start = int(i * self.resolution[0] / num_bars)
+            x_end = int((i + 1) * self.resolution[0] / num_bars)
+            
             y = self.resolution[1] - height
             
             # Draw rectangle
-            cv2.rectangle(spectrum_layer, (x, y), (x + bar_width - 2, self.resolution[1]), self.bar_color, -1)
+            cv2.rectangle(spectrum_layer, (x_start, y), (x_end, self.resolution[1]), self.bar_color, -1)
             
         # Blend spectrum layer with opacity
         cv2.addWeighted(spectrum_layer, self.spectrum_opacity, frame, 1 - self.spectrum_opacity, 0, frame)
+
+        # 3. Static Foreground (Draw LAST so it's on top)
+        h, w = self.fg_array.shape[:2]
+        # Center it
+        y1 = self.fg_center[1] - h // 2
+        y2 = y1 + h
+        x1 = self.fg_center[0] - w // 2
+        x2 = x1 + w
+        
+        # Overlay foreground (simple copy since it's static size)
+        # Handle boundaries just in case
+        dy1, dy2 = max(0, y1), min(self.resolution[1], y2)
+        dx1, dx2 = max(0, x1), min(self.resolution[0], x2)
+        
+        sy1 = max(0, dy1 - y1)
+        sy2 = sy1 + (dy2 - dy1)
+        sx1 = max(0, dx1 - x1)
+        sx2 = sx1 + (dx2 - dx1)
+        
+        if dy2 > dy1 and dx2 > dx1:
+            frame[dy1:dy2, dx1:dx2] = self.fg_array[sy1:sy2, sx1:sx2]
             
         return frame
 

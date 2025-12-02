@@ -14,8 +14,8 @@ st.sidebar.header("Configuration")
 bar_color_hex = st.sidebar.color_picker("Spectrum Color", "#00FF00")
 # Convert hex to RGB
 bar_color = tuple(int(bar_color_hex.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-# OpenCV uses BGR, so reverse it
-bar_color = bar_color[::-1]
+# OpenCV uses BGR, but we are working with PIL/MoviePy which are RGB, so keep it RGB.
+# bar_color = bar_color[::-1]
 
 fps = st.sidebar.slider("FPS", 15, 60, 30)
 resolution_options = {"720p": (1280, 720), "1080p": (1920, 1080)}
@@ -70,6 +70,27 @@ with col2:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
             tmp_img.write(uploaded_image.read())
             image_path = tmp_img.name
+
+st.divider()
+
+# Preview Section
+st.subheader("Preview")
+preview_time = st.slider("Preview Timestamp (seconds)", 0, 60, 10)
+if st.button("Generate Preview Frame"):
+    if not audio_path or not image_path:
+        st.error("Please provide both audio and artwork.")
+    else:
+        with st.spinner("Generating preview..."):
+            try:
+                # Initialize visualizer (lightweight if possible, but we need analysis)
+                viz = AudioVisualizer(audio_path, image_path, resolution=resolution, fps=fps, bar_color=bar_color,
+                                      spectrum_opacity=spectrum_opacity, spectrum_height_scale=spectrum_height, smoothing_factor=smoothing)
+                
+                # Get frame
+                frame = viz.make_frame(preview_time)
+                st.image(frame, caption=f"Preview at {preview_time}s", use_container_width=True)
+            except Exception as e:
+                st.error(f"Error generating preview: {e}")
 
 st.divider()
 
