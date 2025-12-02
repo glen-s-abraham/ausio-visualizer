@@ -1,0 +1,8 @@
+streamlit
+yt-dlp
+moviepy
+librosa
+opencv-python-headless
+numpy
+scipy
+pydub
