@@ -164,8 +164,14 @@ class AudioVisualizer:
             
             y = self.resolution[1] - height
             
-            # Draw rectangle
+            # Draw rectangle (Bottom)
             cv2.rectangle(spectrum_layer, (x_start, y), (x_end, self.resolution[1]), self.bar_color, -1)
+            
+            # Draw rectangle (Top - Inverted & Mirrored)
+            # Use the value from the opposite end of the spectrum array
+            val_top = bars[num_bars - 1 - i]
+            height_top = int(val_top * (self.resolution[1] * self.spectrum_height_scale))
+            cv2.rectangle(spectrum_layer, (x_start, 0), (x_end, height_top), self.bar_color, -1)
             
         # Blend spectrum layer with opacity
         cv2.addWeighted(spectrum_layer, self.spectrum_opacity, frame, 1 - self.spectrum_opacity, 0, frame)
